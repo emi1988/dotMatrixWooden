@@ -32,7 +32,6 @@ private slots:
     void on_pushButton_clicked();
 
     void displayNumber(int number);
-    void gpsSpeedReceived(int speed);
 
     void on_lineEditNumber_returnPressed();
     void on_horizontalSlider_sliderMoved(int position);
@@ -50,9 +49,14 @@ private:
     void initFont();
 
     void dispTime();
+    void dispDate();
+
+    void dispSnake();
 
     QHash<int, QStringList> m_numberHash;
     int m_numberOfMatrices;
+
+    int m_changeCounter;
 };
 
 #endif // MAINWINDOW_H

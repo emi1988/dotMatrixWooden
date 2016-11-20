@@ -1,6 +1,6 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "gpsmanager.h"
+
 
 //#include <stdint.h>
 //#include <stdio.h>
@@ -12,7 +12,10 @@
 #include <wiringPiSPI.h>
 
 #include <QTime>
+#include <QDate>
 #include <QTimer>
+#include <QDebug>
+#include <cmath>
 
 
 #define CHANNEL 0
@@ -33,10 +36,14 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    //set the number of LED-panels
-    m_numberOfMatrices = 2;
+    m_changeCounter = 0;
 
-    if (wiringPiSPISetup(CHANNEL, 1000000) < 0) {
+    //set the number of LED-panels
+    m_numberOfMatrices = 4;
+
+    //if (wiringPiSPISetup(CHANNEL, 1000000) < 0) {
+
+    if (wiringPiSPISetup(CHANNEL, 10000000) < 0) {
         fprintf (stderr, "SPI Setup failed: %s\n", strerror (errno));
         exit(errno);
     }
@@ -47,15 +54,20 @@ MainWindow::MainWindow(QWidget *parent) :
     clearDotMatrix();
 
     //test
-    spiRegVal(1,3,1);
-    spiRegVal(2,5,2);
+   spiRegVal(1,1,1);
+   spiRegVal(2,2,2);
+   spiRegVal(3,3,3);
+   spiRegVal(5,4,4);
 
-    spiRegVal(MAX7219_REG_INTENSITY, 4, -1);
+   clearDotMatrix();
+
+    spiRegVal(MAX7219_REG_INTENSITY, 14, -1);
 
     //refresh time every 3 seconds
     QTimer *timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateTimerFinished()));
-    timer->start(3000);
+    timer->start(5000);
+
 
 
 /*
@@ -128,30 +140,65 @@ void MainWindow::spiRegVal(uint8_t reg, uint8_t val, int matrix)
              wiringPiSPIDataRW(CHANNEL, buf, 2);
         }
     }
+    else
+    {
+        u_int8_t buf[m_numberOfMatrices * 2];
+
+        //intit buffer with zeros
+        for (int i = 0; i < m_numberOfMatrices*2; ++i)
+        {
+            buf[i] =0;
+        }
+
+        buf[(m_numberOfMatrices-matrix)*2] = reg;
+        buf[((m_numberOfMatrices-matrix)*2)+1] = val;
+
+        wiringPiSPIDataRW(CHANNEL, buf, (m_numberOfMatrices * 2));
+    }
+
+   /*
     else if(matrix == 1)
     {
-            uint8_t buf[4];
+        uint8_t buf[6];
+        buf[0] = 0;
+        buf[1] = 0;
 
-            buf[0] = 0;
-            buf[1] = 0;
+        buf[2] = 0;
+        buf[3] = 0;
 
-            buf[2] = reg;
-            buf[3] = val;
-            wiringPiSPIDataRW(CHANNEL, buf, 4);
+        buf[4] = reg;
+        buf[5] = val;
+        wiringPiSPIDataRW(CHANNEL, buf, 6);
     }
     else if(matrix == 2)
     {
-            uint8_t buf[4];
+        uint8_t buf[6];
+        buf[0] = 0;
+        buf[1] = 0;
 
-            buf[0] = reg;
-            buf[1] = val;
+        buf[2] = reg;
+        buf[3] = val;
 
-            buf[2] = 0;
-            buf[3] = 0;
-
-            wiringPiSPIDataRW(CHANNEL, buf, 4);
+        buf[4] = 0;
+        buf[5] = 0;
+        wiringPiSPIDataRW(CHANNEL, buf, 6);
     }
+    else if(matrix == 3)
+    {
+        uint8_t buf[6];
 
+        buf[0] = reg;
+        buf[1] = val;
+
+        buf[2] = 0;
+        buf[3] = 0;
+
+        buf[4] = 0;
+        buf[5] = 0;
+
+            wiringPiSPIDataRW(CHANNEL, buf, 6);
+    }
+*/
 
         //sleep(0.1);
 }
@@ -159,21 +206,24 @@ void MainWindow::spiRegVal(uint8_t reg, uint8_t val, int matrix)
 
 void MainWindow::clearDotMatrix()
 {
-    for (int i = 1; i < 9; ++i)
+
+//    for (int i = 1; i < 9; ++i)
+//    {
+//        spiRegVal(i,0,-1);
+//    }
+
+    for (int currentMatrix = 0; currentMatrix < m_numberOfMatrices+1; ++currentMatrix)
     {
-        spiRegVal(i,0,-1);
-
+        for (int currentColumn = 1; currentColumn < 9; ++currentColumn)
+        {
+            spiRegVal(currentColumn,0,currentMatrix);
+        }
     }
-    spiRegVal(1,0,-1);
 
-//    spiRegVal(1,0);
-//    spiRegVal(2,0);
-//    spiRegVal(3,0);
-//    spiRegVal(4,0);
-//    spiRegVal(5,0);
-//    spiRegVal(6,0);
-//    spiRegVal(7,0);
-//    spiRegVal(8,0);
+//    for (int i = 1; i < 9; ++i)
+//    {
+//        spiRegVal(i,0,2);
+//    }
 
 }
 
@@ -208,7 +258,7 @@ void MainWindow::initFont()
          tmpNumber.append("110");
          tmpNumber.append("010");
          tmpNumber.append("010");
-         tmpNumber.append("111");
+         tmpNumber.append("010");
 
         //rotate font --> change rows and cols
          tmpRotateNumber = rotateFont(tmpNumber);
@@ -336,17 +386,15 @@ void MainWindow::initFont()
 
 void MainWindow::dispTime()
 {
-    clearDotMatrix();
 
     QTime timeObject = QTime::currentTime();
 
     int hour = timeObject.hour();
 
-
-    hour = 8;
-
     QStringList zeroBinary = m_numberHash.value(0);
 
+    int matrixLeft  = 3;
+    int matrixRight = 4;
 
     if(hour < 10)
     {
@@ -355,20 +403,18 @@ void MainWindow::dispTime()
         //left number part >>zero
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((8-i), binToDec(zeroBinary.at(i)), 2);
+            spiRegVal((8-i), binToDec(zeroBinary.at(i)), matrixLeft);
         }
 
         //right number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((4-i), binToDec(hourBinary.at(i)), 2);
+            spiRegVal((4-i), binToDec(hourBinary.at(i)), matrixLeft);
         }
-
 
     }
     else
     {
-
         int hourLeft = QString::number(hour).left(1).toInt();
         int hourRight = QString::number(hour).right(1).toInt();
 
@@ -378,25 +424,23 @@ void MainWindow::dispTime()
         //left number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((8-i), binToDec(hourLeftBin.at(i)),2);
+            spiRegVal((8-i), binToDec(hourLeftBin.at(i)), matrixLeft);
         }
 
         //mid number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((4-i), binToDec(hourRightBin.at(i)),2);
+            spiRegVal((4-i), binToDec(hourRightBin.at(i)), matrixLeft);
         }
     }
 
     //hour minute separator
 //    spiRegVal(1, 10, 2);
 //    spiRegVal(8, 10, 1);
-    spiRegVal(8, 4, 1);
-    spiRegVal(1, 4, 2);
+    spiRegVal(8, 4, matrixRight);
+    spiRegVal(1, 4, matrixLeft);
 
     int minute = timeObject.minute();
-
-    minute = 7;
 
     if(minute < 10)
     {
@@ -406,13 +450,13 @@ void MainWindow::dispTime()
         //left number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((7-i), binToDec(zeroBinary.at(i)),1);
+            spiRegVal((7-i), binToDec(zeroBinary.at(i)), matrixRight);
         }
 
         //right number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((3-i), binToDec(minuteBinary.at(i)),1);
+            spiRegVal((3-i), binToDec(minuteBinary.at(i)), matrixRight);
         }
 
     }
@@ -428,17 +472,161 @@ void MainWindow::dispTime()
         //left number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((7-i), binToDec(minuteLeftBin.at(i)),1);
+            spiRegVal((7-i), binToDec(minuteLeftBin.at(i)), matrixRight);
         }
 
         //right number part
         for (int i = 0; i < 3; ++i)
         {
-            spiRegVal((3-i), binToDec(minuteRightBin.at(i)),1);
+            spiRegVal((3-i), binToDec(minuteRightBin.at(i)), matrixRight);
         }
 
     }
 
+
+}
+
+void MainWindow::dispDate()
+{
+
+    int matrixLeft  = 2;
+    int matrixRight = 1;
+
+
+
+QDate dateObject = QDate::currentDate();
+
+    int day = dateObject.day();
+
+    QStringList zeroBinary = m_numberHash.value(0);
+
+
+    if(day < 10)
+    {
+        QStringList dayBinary = m_numberHash.value(day);
+
+        //left number part >>zero
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((8-i), binToDec(zeroBinary.at(i)), matrixRight);
+        }
+
+        //right number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((4-i), binToDec(dayBinary.at(i)), matrixRight);
+        }
+
+    }
+    else
+    {
+        int dayLeft = QString::number(day).left(1).toInt();
+        int dayRight = QString::number(day).right(1).toInt();
+
+        QStringList dayLeftBin = m_numberHash.value(dayLeft);
+        QStringList dayRightBin = m_numberHash.value(dayRight);
+
+        //left number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((8-i), binToDec(dayLeftBin.at(i)), matrixRight);
+        }
+
+        //mid number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((4-i), binToDec(dayRightBin.at(i)), matrixRight);
+        }
+    }
+
+    //day month separator
+//    spiRegVal(1, 10, 2);
+//    spiRegVal(8, 10, 1);
+
+    spiRegVal(1, 1, matrixRight);
+
+    int month = dateObject.month();
+
+    if(month < 10)
+    {
+        QStringList monthBinary = m_numberHash.value(month);
+
+
+        //left number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((7-i), binToDec(zeroBinary.at(i)), matrixLeft);
+        }
+
+        //right number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((3-i), binToDec(monthBinary.at(i)), matrixLeft);
+        }
+
+    }
+    else
+    {
+
+        int monthLeft = QString::number(month).left(1).toInt();
+        int monthRight = QString::number(month).right(1).toInt();
+
+        QStringList monthLeftBin = m_numberHash.value(monthLeft);
+        QStringList monthRightBin = m_numberHash.value(monthRight);
+
+        //left number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((7-i), binToDec(monthLeftBin.at(i)), matrixLeft);
+        }
+
+        //right number part
+        for (int i = 0; i < 3; ++i)
+        {
+            spiRegVal((3-i), binToDec(monthRightBin.at(i)), matrixLeft);
+        }
+
+    }
+
+}
+
+void MainWindow::dispSnake()
+{
+
+    QList<int> pointList;
+    pointList << 1 << 2 << 4 << 8 << 16 ;
+
+    for (int line = 0; line < 9; ++line)
+    {
+        int currentLine = (int)pow(2,line);
+
+        for (int reg = 1; reg < 9; ++reg)
+        {
+            spiRegVal(reg, currentLine,1);
+
+            usleep(5 * 1000);
+
+            if(reg%3 == 0)
+            {
+                clearDotMatrix();
+            }
+
+        }
+
+
+        for (int reg = 1; reg < 9; ++reg)
+        {
+            spiRegVal(reg, currentLine,2);
+
+            usleep(5 * 1000);
+
+            if(reg%3 == 0)
+            {
+                clearDotMatrix();
+            }
+        }
+
+    }
 
 }
 
@@ -544,12 +732,6 @@ void MainWindow::on_pushButton_clicked()
     clearDotMatrix();
 }
 
-void MainWindow::gpsSpeedReceived(int speed)
-{
-
-    displayNumber(speed);
-
-}
 
 void MainWindow::on_lineEditNumber_returnPressed()
 {
@@ -569,5 +751,27 @@ void MainWindow::on_pushButtonDispTime_clicked()
 
 void MainWindow::updateTimerFinished()
 {
+    clearDotMatrix();
+
+    dispDate();
     dispTime();
+
+
+
+    /*
+    if(m_changeCounter== 0)
+    {
+        //dispSnake();
+        dispTime();
+
+    }
+    else if(m_changeCounter == 1)
+    {
+        //dispSnake();
+        dispDate();
+
+        m_changeCounter = -1;
+    }
+    m_changeCounter ++;
+*/
 }

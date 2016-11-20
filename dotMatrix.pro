@@ -18,13 +18,10 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp \
-    gpsmanager.cpp
+        mainwindow.cpp
 
 HEADERS  += mainwindow.h \
-    myDefs.h \
-    gpsmanager.h \
-    defsGps.h
+    myDefs.h
 
 FORMS    += mainwindow.ui
 
